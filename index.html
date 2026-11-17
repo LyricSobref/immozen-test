@@ -845,7 +845,7 @@ function renderCarte() {
   box.innerHTML=(has?portalsDetailsHtml():'')+'<div class="dashboard">'+
   '<section class="panel listings"><div class="panel-head"><h3>'+esc(modeLabel)+'</h3><span class="counter">'+(has?vf.length+' résultat(s)':'Aperçu')+'</span></div><div class="listing-sub">'+(has?'Uniquement : '+esc(modeLabel)+' · annonces collectées sur Bien’ici':state.typeFilter==='Neuf'?'Lancez une recherche pour afficher les projets neufs':'Exemples visuels · lancez une recherche pour les annonces réelles')+'</div>'+izTerrainToolbar()+'<div class="property-list">'+(listings||'<div class="empty-inline">Aucune annonce de cette catégorie dans les résultats chargés.</div>')+'</div></section>'+
   '<section class="panel map-panel"><div class="map-switch"><button class="active">⌖ &nbsp;Carte</button><button onclick="document.querySelector(\'.listings\').scrollIntoView({behavior:\'smooth\'})">☷ &nbsp;Liste</button></div><div id="map"></div><div class="map-caption">'+(has?'Positions approximatives des annonces · cliquez sur un prix pour ouvrir la fiche':'Carte de découverte · recherchez une commune pour afficher les annonces')+'</div></section>'+
-  '<aside class="sidebar"><section class="panel market"><h3><span>▥</span> Indicateurs du marché</h3><p>Zone : '+region+'</p><div class="market-stats"><div><span class="stat-icon">⌂</span><strong>'+median+'</strong><small>Prix médian / m²</small></div><div><span class="stat-icon">▤</span><strong>'+(has?vf.length:'—')+'</strong><small>Annonces trouvées</small></div><div><span class="stat-icon">↗</span><strong>'+(has?dpes:'—')+'</strong><small>DPE renseignés</small></div></div><div class="market-foot">'+(has?'Calculé sur les annonces affichées, non sur toutes les ventes':'Les indicateurs s’affichent après une recherche')+'</div></section><section class="panel tools"><h3><span>⚒</span> Outils ImmoZen</h3><button onclick="setTabPublic(\'comparateur\')"><span class="tool-icon">▣</span><span><b>Comparer des biens</b><small>Analysez plusieurs annonces</small></span><em>›</em></button><button onclick="setTabPublic(\'localiser\')"><span class="tool-icon">⌖</span><span><b>Géolocaliser une annonce</b><small>DPE, Street View et Google Earth</small></span><em>›</em></button><button onclick="setTabPublic(\'historique\')"><span class="tool-icon">▥</span><span><b>Historique des recherches</b><small>Retrouvez vos biens analysés</small></span><em>›</em></button><button onclick="setTabPublic(\'documents\')"><span class="tool-icon">▤</span><span><b>Documents utiles</b><small>Cadastre, DVF, risques, urbanisme</small></span><em>›</em></button></section></aside></div>';
+  '<aside class="sidebar"><section class="panel market"><h3><span>▥</span> Indicateurs du marché</h3><p>Zone : '+region+'</p><div class="market-stats"><div><span class="stat-icon">⌂</span><strong>'+median+'</strong><small>Prix médian / m²</small></div><div><span class="stat-icon">▤</span><strong>'+(has?vf.length:'—')+'</strong><small>Annonces trouvées</small></div><div><span class="stat-icon">↗</span><strong>'+(has?dpes:'—')+'</strong><small>DPE renseignés</small></div></div><div class="market-foot">'+(has?'Calculé sur les annonces affichées, non sur toutes les ventes':'Les indicateurs s’affichent après une recherche')+'</div></section><section class="panel tools"><h3><span>⚒</span> Outils ImmoZen</h3><button onclick="setTabPublic(\'comparateur\')"><span class="tool-icon">▣</span><span><b>Comparer des biens</b><small>Analysez plusieurs annonces</small></span><em>›</em></button><button onclick="setTabPublic(\'localiser\')"><span class="tool-icon">⌖</span><span><b>Géolocaliser une annonce</b><small>Adresse, carte et photos</small></span><em>›</em></button><button onclick="setTabPublic(\'historique\')"><span class="tool-icon">▥</span><span><b>Historique des recherches</b><small>Retrouvez vos biens analysés</small></span><em>›</em></button><button onclick="setTabPublic(\'documents\')"><span class="tool-icon">▤</span><span><b>Documents utiles</b><small>Cadastre, DVF, risques, urbanisme</small></span><em>›</em></button></section></aside></div>';
   if(map){map.remove();map=null;}
   if(typeof L==='undefined'){document.getElementById('map').innerHTML='<div class="map-unavailable">Carte indisponible sans connexion Internet.</div>';return;}
   map=L.map('map',{scrollWheelZoom:true,zoomControl:false}).setView([43.85,1.65],9);
@@ -2162,6 +2162,112 @@ function izNewDirectGPS(text){
  if(lat>=-90&&lat<=90&&lon>=-180&&lon<=180)return {lat,lon,exact:false,gps:true,score:1,label:'Coordonnées relevées dans l’annonce'};
  return null;
 }
+
+/* IMMOZEN : AIGUILLAGE STRICT DES MOTEURS.
+ * Les maisons ne passent JAMAIS dans la recherche de terrain parce que leur descriptif
+ * mentionne un jardin ou une parcelle. Les terrains ne passent JAMAIS par ADEME/DPE.
+ */
+function izNewPropertyKind(url,title,matched){
+ var known=matched&&matched.type;
+ if(known==='Terrain')return 'terrain';
+ if(known==='MaisonEx'||known==='Maison')return 'maison';
+ if(known==='Appartement')return 'appartement';
+ if(known==='Neuf')return 'neuf';
+ var path='';try{path=decodeURIComponent(new URL(url).pathname).toLowerCase()}catch(e){}
+ // First use the real listing category in the URL, if present.
+ if(/\/(?:terrain|terrains)(?:\/|$)/i.test(path))return 'terrain';
+ if(/\/(?:appartement|appartements)(?:\/|$)/i.test(path))return 'appartement';
+ if(/\/(?:maison|maisons)(?:\/|$)/i.test(path))return 'maison';
+ if(/\/(?:neuf|programme-neuf|construction|vefa)(?:\/|$)/i.test(path))return 'neuf';
+ var head=String(title||'').replace(/^Title\s*:\s*/i,'').slice(0,250);
+ // Ignore references to terrain in house descriptions and agency advertising.
+ if(/\b(?:programme neuf|vefa|maison\s+à\s+construire|projet\s+de\s+construction|terrain\s*\+\s*maison)\b/i.test(head))return 'neuf';
+ var start=head.match(/^(?:(?:achat|vente|annonce|vendre|a vendre|à vendre|offre|exclusivit[eé])\s+)*(?:d['’]un(?:e)?\s+)?(?:un(?:e)?\s+)?(maison|villa|appartement|studio|terrain|parcelle|lot\s+à\s+bâtir)\b/i);
+ if(!start)start=head.match(/\b(?:achat|vente)\s+(?:d['’]un(?:e)?\s+)?(maison|villa|appartement|studio|terrain|parcelle)\b/i);
+ var word=start&&start[1]&&start[1].toLowerCase();
+ if(word==='maison'||word==='villa')return 'maison';
+ if(word==='appartement'||word==='studio')return 'appartement';
+ if(word==='terrain'||word==='parcelle'||word==='lot à bâtir')return 'terrain';
+ return 'inconnu';
+}
+function izNewDpeCriteres(title,text,matched,kind){
+ var source=(String(title||'')+'\n'+String(text||''));
+ var e=extraireCriteres(source);
+ // The old extractor independently guesses T if a house has a garden: override it.
+ e.type=kind==='appartement'?'A':'M';
+ var surface=surfacesAnnonce(source).filter(x=>x.valeur>=12&&x.valeur<=800);
+ // Title's main surface is much more trustworthy than an ancillary terrain surface.
+ var fromTitle=String(title||'').match(/(?:maison|villa|appartement|studio)[^\n]{0,90}?(\d{2,4})(?:[.,]\d+)?\s*m\s*[²2]/i);
+ if(fromTitle){var n=Number(fromTitle[1]);if(n>=12&&n<=800){e.surface=n;surface.unshift({valeur:n,nature:'Surface annoncée'});}}
+ if(matched&&matched.type!=='Terrain'&&Number(matched.surface)>10)e.surface=Number(matched.surface);
+ e.surfaces=surface.filter((x,i,a)=>a.findIndex(y=>Math.abs(y.valeur-x.valeur)<.1)===i);
+ if(!e.surfaces.length&&e.surface)e.surfaces=[{valeur:e.surface,nature:'Surface annoncée'}];
+ e.dpeNum=0;
+ var kwh=source.match(/(?:DPE|consommation\s+(?:[ée]nerg[ée]tique|d['’][ée]nergie)?|[ée]nergie\s+primaire)[^\n]{0,55}?(\d{2,3})\s*kWh/i)
+  ||source.match(/\b(\d{2,3})\s*kWh\s*\/?\s*(?:m\s*[²2]|m2)/i);
+ if(kwh)e.dpeNum=Number(kwh[1]);
+ if(matched){if(matched.dpe)e.dpe=String(matched.dpe).toUpperCase();if(matched.ges)e.ges=String(matched.ges).toUpperCase();}
+ return e;
+}
+async function izNewDpeCommune(code){
+ if(!/^\d{5}$/.test(String(code||'')))throw Error('Commune non reconnue');
+ // Render's authenticated backend removes dependence on browser CORS for ADEME.
+ try{
+  var r=await fetch('/api/dpe?insee='+encodeURIComponent(code));
+  if(r.ok){var j=await r.json();if(Array.isArray(j.records))return j;}
+ }catch(e){}
+ // When viewing the HTML locally, reuse the original house DPE engine.
+ var list=await chargerDpeCommune(code);
+ return {records:list,partial:false};
+}
+function izNewDpeFilter(rows,criteria,point,kind){
+ var records=Array.isArray(rows)?rows:[],haveDpe=!!(criteria.dpe||criteria.ges||criteria.dpeNum),haveSurface=criteria.surfaces&&criteria.surfaces.length;
+ // No blind address guessing from a surface alone.
+ if(!haveDpe||!haveSurface)return [];
+ var uniq=new Set(),items=[];
+ for(var rec of records){
+  if(!Array.isArray(rec)||!Array.isArray(rec[6])||!rec[5])continue;
+  if(rec[2]!==criteria.type)continue;
+  var lat=Number(rec[6][1]),lon=Number(rec[6][0]);
+  if(!(lat>40&&lat<52&&lon>-6&&lon<11))continue;
+  if(criteria.dpe&&rec[4]!==criteria.dpe)continue;
+  if(criteria.ges&&rec[7]!==criteria.ges)continue;
+  var e=meilleurEcartSurface(Number(rec[1]),criteria.surfaces).ecart;
+  if(e>.24)continue;
+  if(criteria.dpeNum&&Math.abs(criteria.dpeNum-rec[0])/Math.max(1,criteria.dpeNum)>.25)continue;
+  var distance=point?distM(point.lat,point.lon,lat,lon):null;
+  if(point&&distance>500)continue;
+  var score=dpeScore({etiquette:criteria.dpe||'',ges:criteria.ges||'',dpeNum:criteria.dpeNum||0,
+   type:criteria.type,annee:criteria.annee||0,surfaces:criteria.surfaces,lat:point?point.lat:null,lon:point?point.lon:null},rec);
+  var key=String(rec[5]).toLowerCase().replace(/\s+/g,' ')+'|'+Math.round(lat*10000)+'|'+Math.round(lon*10000);
+  if(uniq.has(key))continue;uniq.add(key);
+  items.push({rec,score:score.s/Math.max(1,score.max),difference:e,dist:distance});
+ }
+ items.sort((a,b)=>b.score-a.score||a.difference-b.difference);
+ return items.slice(0,3);
+}
+function izNewHouseResult(kind,point,address,criteria,match,opts){
+ opts=opts||{};var el=document.getElementById('izGeoPublicResult');if(!el)return;
+ var type=kind==='appartement'?'Appartement':'Maison existante';
+ var html='<div class="iznew-result-head"><div><div class="iznew-eyebrow">'+izNewE(type)+'</div><h3>'+(point?'Adresse repérée':'Localisations à vérifier')+'</h3><p>'+izNewE(address||'Recherche par caractéristiques du logement')+'</p></div><span class="iznew-status">Non confirmé</span></div>';
+ if(point){
+  var bbox=[point.lon-.003,point.lat-.002,point.lon+.003,point.lat+.002].join(',');
+  html+='<div class="iznew-map"><iframe loading="lazy" title="Adresse repérée" src="https://www.openstreetmap.org/export/embed.html?bbox='+encodeURIComponent(bbox)+'&layer=mapnik&marker='+encodeURIComponent(point.lat+','+point.lon)+'"></iframe></div>';
+  html+='<div class="iznew-mainlinks">'+izNewMapLinks(point.lat,point.lon)+'</div>';
+ }
+ if(match&&match.length){
+  html+='<div class="iznew-candidatetitle">Adresses compatibles avec le DPE et la surface</div>';
+  html+=match.map(function(c,i){var r=c.rec;
+   return '<div class="iznew-card"><div><strong>Proposition '+(i+1)+' · à comparer aux photos</strong><p>'+izNewE(r[5])+'</p><p>'+izNewE(r[1]+' m² · DPE '+(r[4]||'—')+' · GES '+(r[7]||'—'))+'</p></div>'+izNewMapLinks(r[6][1],r[6][0])+'</div>';
+  }).join('');
+  html+='<p class="iznew-caution">Les DPE sont des rapprochements indicatifs, pas des preuves d’identité. Vérifiez la façade et l’environnement avant de retenir une adresse.</p>';
+ }else if(!point){
+  html+='<p class="iznew-caution">'+izNewE(opts.missing?'Le DPE et la surface ne permettent pas de départager des adresses.':'Aucune correspondance DPE suffisamment discriminante n’a été trouvée dans cette commune.')+'</p>';
+ }
+ if(opts.unavailable)html+='<p class="iznew-caution">La recherche DPE est momentanément indisponible. Les adresses ne sont pas inventées.</p>';
+ if(opts.ocrUnavailable)html+='<p class="iznew-caution">Certaines photographies n’ont pas pu être lues automatiquement.</p>';
+ el.innerHTML=html;
+}
 async function izNewRun(){
  var count=++IZ_NEW_RUN,btn=document.getElementById('pasteBtn'),u=document.getElementById('pasteUrl').value.trim();
  if(!/^https?:\/\/[^\s]+\.[^\s]+/i.test(u)){izNewDisplay('warn','Lien invalide','Collez un lien complet vers une annonce immobilière.');return}
@@ -2193,11 +2299,12 @@ async function izNewRun(){
   if(count!==IZ_NEW_RUN)return;
   if(!city){var fromText=String(text).match(/\b(?:commune|ville)\s*:\s*([A-Za-zÀ-ÿ' -]{3,55})/i);if(fromText)city=fromText[1].trim()}
   text=izNewEvidenceText(text);var surface=izNewSurfaces(text),addresses=izNewAddresses(text,city),gps=izNewDirectGPS(izNewEvidenceText(extra+'\n'+(ocrState.text||'')));
-  var isTerrain=/\bterrain|parcelle|lotissement/i.test(u+' '+title+' '+text.slice(0,1800));
+  var kind=izNewPropertyKind(u,title,matched);
+  var isTerrain=kind==='terrain';
   var hasMapMark=ocrState.results.some(x=>x.red);
   var streets=izNewMapStreets(ocrState.results.filter(function(x){return x.red||/\b(?:itin[eé]raire|d[eé]part|google\s*maps|vous\s*[eê]tes\s*ici)\b/i.test(x.text||'');}).map(x=>x.text||'').join('\n'));
-  IZ_NEW_LAST={url:u,title,city,text,photos,surface,addresses,isTerrain,ocrState,streets,hasMapMark};
-  document.getElementById('izLocFacts').textContent=[city,surface.total?surface.total.toLocaleString('fr-FR')+' m²':''].filter(Boolean).join(' · ');
+  IZ_NEW_LAST={url:u,title,city,text,photos,surface,addresses,kind,isTerrain,ocrState,streets,hasMapMark};
+  document.getElementById('izLocFacts').textContent=[kind==='maison'?'Maison':kind==='appartement'?'Appartement':kind==='terrain'?'Terrain':kind==='neuf'?'Construction neuve':'Type à confirmer',city,surface.total?surface.total.toLocaleString('fr-FR')+' m²':''].filter(Boolean).join(' · ');
   var commune=null;
   if(city){try{commune=await izNewCommune(city)}catch(e){}}
   if(count!==IZ_NEW_RUN)return;
@@ -2214,6 +2321,29 @@ async function izNewRun(){
    try{var sector=await izNewSectorFromStreets(streets,commune);if(sector&&await izNewPointAllowed(sector,commune)){point=sector;address=sector.label;}}catch(e){}
   }
   if(count!==IZ_NEW_RUN)return;
+  // Strict routing: the existing-house and apartment engine uses DPE, NOT parcel search.
+  if(kind==='maison'||kind==='appartement'){
+   izNewDisplay('wait','Recherche du logement','Croisement des caractéristiques et des adresses disponibles.');
+   var e=izNewDpeCriteres(title,text,matched,kind),match=[],dpeUnavailable=false;
+   var sufficient=!!(e.dpe||e.ges||e.dpeNum)&&!!(e.surfaces&&e.surfaces.length);
+   if(commune&&sufficient){
+    try{var data=await izNewDpeCommune(commune.code);match=izNewDpeFilter(data.records,e,point,kind);}
+    catch(e){dpeUnavailable=true;}
+   }
+   if(count!==IZ_NEW_RUN)return;
+   izNewHouseResult(kind,point,address,e,match,{missing:!sufficient||!commune,
+    unavailable:dpeUnavailable,ocrUnavailable:photos.length>readable.length||!!ocrState.error});
+   document.getElementById('izLocFallback').hidden=!!(point||match.length);return;
+  }
+  if(kind==='inconnu'){
+   izNewDisplay('warn','Type de bien à confirmer','L’annonce ne permet pas de distinguer maison, appartement et terrain. Aucun moteur n’est lancé au hasard.');
+   document.getElementById('izLocFallback').hidden=false;return;
+  }
+  if(kind==='neuf'){
+   if(point)izNewResult(address,point,commune,0,[],{cadError:false});
+   else izNewDisplay('warn','Emplacement non confirmé','Le projet neuf nécessite une adresse ou une zone explicite. Aucun DPE de maison existante ni terrain cadastral n’est inventé.');
+   document.getElementById('izLocFallback').hidden=!!point;return;
+  }
   if(!point){
    if(!retrieved&&!matched&&!extra&&!uploaded.length){izNewDisplay('warn','Photos non analysables',photos.length?'Le site d’origine ne permet pas de lire automatiquement ses photos dans ce navigateur. Ouvrez ImmoZen avec le lanceur local, ou joignez la capture qui contient l’adresse.':'L’annonce n’a pas pu être lue intégralement ; ImmoZen ne peut pas confirmer d’adresse.');}
    else if(addresses.length){izNewDisplay('warn','Adresse non confirmée','Une adresse a été trouvée, mais sa position n’a pas été confirmée.');}

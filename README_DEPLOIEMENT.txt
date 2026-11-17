@@ -30,3 +30,12 @@ LIMITES
 - Ne pas communiquer l'URL privée et éviter d'y importer des données personnelles.
 - La reconnaissance de paysage, les données Sitadel/DMPC et un index national PostGIS
   ne sont pas intégrés automatiquement.
+
+
+PATCH MOT​EURS SÉPARÉS : novembre 2026
+- Les maisons et appartements existants passent par le DPE ADEME, avec contrôles sur le type et la surface.
+- Les terrains suivent le parcours cadastral / parcelles mères, jamais le DPE.
+- Les constructions neuves ne sont pas traitées comme des DPE existants.
+- L’analyse des photos reste limitée aux images effectivement accessibles.
+- Déploiement : remplacer index.html et server.py dans GitHub puis Commit changes ; Render redéploie.
+- Ne pas exposer le mot de passe d’environnement.

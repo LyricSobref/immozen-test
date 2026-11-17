@@ -13,6 +13,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 import json
+from urllib.parse import urlencode
 import re
 import html
 import socket
@@ -29,6 +30,7 @@ ROOT = Path(__file__).resolve().parent
 PAGE = 'index.html'
 MAX_IMAGE = 17_000_000
 MAX_MARKDOWN = 1_800_000
+MAX_DPE = 9_000_000
 USER_AGENT = 'Mozilla/5.0 (compatible; ImmoZenLocalTest/1.0; +http://127.0.0.1)'
 
 
@@ -40,6 +42,8 @@ def _allowed(name: str, kind: str) -> bool:
         return h in {'bienici.com', 'www.bienici.com'}
     if kind == 'reader':
         return h == 'r.jina.ai'
+    if kind == 'dpe':
+        return h == 'data.ademe.fr'
     return (
         h in {'file.bienici.com', 'storage.gra.cloud.ovh.net', 'photos.ubiflow.net'}
         or h.endswith('.bienici.com')
@@ -65,7 +69,7 @@ def fetch(url: str, kind: str, max_bytes: int) -> tuple[bytes, str]:
         raise ValueError('Adresse distante non autorisée')
     opener = build_opener(_ConstrainedRedirect(kind))
     # No cookies or authentication. A blocked origin stays blocked.
-    req = Request(url, headers={'User-Agent': USER_AGENT, 'Accept': 'image/avif,image/webp,image/jpeg,image/png,image/*;q=0.8,*/*;q=0.1' if kind == 'image' else 'text/markdown,text/html;q=0.9,*/*;q=0.6'})
+    req = Request(url, headers={'User-Agent': USER_AGENT, 'Accept': 'image/avif,image/webp,image/jpeg,image/png,image/*;q=0.8,*/*;q=0.1' if kind == 'image' else 'application/json' if kind == 'dpe' else 'text/markdown,text/html;q=0.9,*/*;q=0.6'})
     with opener.open(req, timeout=14) as response:
         content_type = response.headers.get('Content-Type', '').split(';')[0].lower()
         if kind == 'image' and not content_type.startswith('image/'):
@@ -151,6 +155,43 @@ class Handler(BaseHTTPRequestHandler):
             return
         qs = parse_qs(url.query)
         target = (qs.get('url') or [''])[0]
+        if url.path == '/api/dpe':
+            # Authenticated, narrowly scoped ADEME query; no arbitrary URL passed by clients.
+            insee = (qs.get('insee') or [''])[0]
+            if not re.fullmatch(r'\d{5}', insee):
+                self.error(400, 'Code commune invalide')
+                return
+            fields = 'conso_5_usages_par_m2_ep,etiquette_dpe,etiquette_ges,surface_habitable_logement,type_batiment,annee_construction,numero_voie_ban,nom_rue_ban,_geopoint'
+            query = urlencode({'size':'3500','select':fields,'qs':'code_insee_ban:'+insee})
+            api_url = 'https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines?' + query
+            try:
+                data, _ = fetch(api_url, 'dpe', MAX_DPE)
+                payload = json.loads(data)
+                records = []
+                for item in payload.get('results', []):
+                    gp = str(item.get('_geopoint') or '').split(',')
+                    if len(gp) != 2:
+                        continue
+                    try:
+                        lat, lon = float(gp[0]), float(gp[1])
+                        size = float(item.get('surface_habitable_logement') or 0)
+                        conso = float(item.get('conso_5_usages_par_m2_ep') or 0)
+                    except (ValueError, TypeError):
+                        continue
+                    if not (40 < lat < 52 and -6 < lon < 11 and 9 < size < 2000):
+                        continue
+                    typ = str(item.get('type_batiment') or '').lower()
+                    typ = 'M' if 'maison' in typ else 'A' if 'appartement' in typ else 'U'
+                    address = (str(item.get('numero_voie_ban') or '') + ' ' + str(item.get('nom_rue_ban') or '')).strip()
+                    if not address:
+                        continue
+                    records.append([round(conso), round(size), typ, item.get('annee_construction') or 0,
+                        item.get('etiquette_dpe') or '', address, [lon, lat], item.get('etiquette_ges') or ''])
+                response = {'records': records, 'partial': int(payload.get('total') or 0) > len(payload.get('results') or [])}
+                self.send_bytes(200, json.dumps(response, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
+            except (HTTPError, URLError, ValueError, TimeoutError, OSError, json.JSONDecodeError):
+                self.error(502, 'Données DPE temporairement indisponibles')
+            return
         if url.path == '/api/photo':
             try:
                 data, content_type = fetch(target, 'image', MAX_IMAGE)
