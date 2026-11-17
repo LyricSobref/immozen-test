@@ -1,25 +1,41 @@
-IMMOZEN — CORRECTION DU MOTEUR MAISONS / DPE
+IMMOZEN — TEST SUR RENDER (PRIVÉ)
+================================
+1) Dans GitHub, ouvrir le dépôt immozen-test (branche main).
+2) Ajouter à la RACINE du dépôt les fichiers suivants :
+   - index.html
+   - server.py
+   - requirements.txt
+3) Dans Render > Web Service > Configuration :
+   Language: Python 3
+   Branch: main
+   Region: Frankfurt
+   Root Directory: VIDE
+   Build Command: pip install -r requirements.txt
+   Start Command: python server.py
+   Instance: Free (0 $)
+4) Dans Render > Environment Variables, AJOUTER :
+   Clé: IMMOZEN_TEST_PASSWORD
+   Valeur: choisir un mot de passe long, nouveau et privé.
+   Ne jamais inclure ce mot de passe dans GitHub ou dans un message ChatGPT.
+5) Cliquer Deploy. Lorsque l'URL HTTPS est active, le navigateur demandera
+   un identifiant : immozen, et le mot de passe choisi.
 
-Cette archive contient les fichiers de remplacement de votre serveur Render déjà opérationnel.
+LIMITES
+- Ceci est un prototype de TEST, pas un service de production.
+- Le serveur ne peut lire que les annonces et images accessibles publiquement.
+- Les restrictions des plateformes restent applicables.
+- L'OCR dépend d'une bibliothèque externe chargée dans le navigateur.
+- Les données cadastrales nationales peuvent nécessiter des téléchargements importants,
+  et l'offre gratuite a des limites de ressources.
+- Ne pas communiquer l'URL privée et éviter d'y importer des données personnelles.
+- La reconnaissance de paysage, les données Sitadel/DMPC et un index national PostGIS
+  ne sont pas intégrés automatiquement.
 
-1. Ouvrir le dépôt GitHub LyricSobref/immozen-test.
-2. Ajouter/remplacer index.html et server.py à la racine du dépôt.
-3. Cliquer sur Commit changes.
-4. Sur Render, vérifier que le nouveau déploiement indique "Live".
-5. Ouvrir https://immozen-test.onrender.com/ et actualiser avec Ctrl+F5.
-6. Tester une annonce de maison avec DPE puis une annonce de terrain.
 
-Le moteur Maisons/Apartements affiche de nouveau un indice de correspondance (%)
-par adresse candidate, calculé à partir du DPE, du GES, de la surface, de l'année
-et des indices géographiques disponibles. Ce pourcentage n'est PAS une
-probabilité statistique ni une adresse confirmée. Le moteur Terrains reste séparé.
-
-La recherche ADEME côté serveur est paginée pour limiter les omissions ;
-sur les grandes communes le volume peut rester partiel et le site le signale.
-Le bon emplacement ne peut être garanti sans les indices de l'annonce et la
-vérification des photos. Aucun mot de passe n'est inclus dans les fichiers.
-
-COMMANDES RENDER CONSERVÉES :
-Build command : pip install -r requirements.txt
-Start command : python server.py
-Variable : IMMOZEN_TEST_PASSWORD (déjà enregistrée dans Render)
+PATCH MOT​EURS SÉPARÉS : novembre 2026
+- Les maisons et appartements existants passent par le DPE ADEME, avec contrôles sur le type et la surface.
+- Les terrains suivent le parcours cadastral / parcelles mères, jamais le DPE.
+- Les constructions neuves ne sont pas traitées comme des DPE existants.
+- L’analyse des photos reste limitée aux images effectivement accessibles.
+- Déploiement : remplacer index.html et server.py dans GitHub puis Commit changes ; Render redéploie.
+- Ne pas exposer le mot de passe d’environnement.
