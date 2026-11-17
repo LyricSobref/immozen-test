@@ -1,0 +1,1 @@
+# Aucune dependance Python externe : serveur standard library uniquement.
