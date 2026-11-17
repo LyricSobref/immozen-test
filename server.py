@@ -115,6 +115,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(data)))
         self.send_header('Cache-Control', f'private, max-age={cache}' if cache else 'no-store')
+        if content_type.startswith('text/html'):
+            self.send_header('X-ImmoZen-Version', 'v8-progress-candidates-earth')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-Frame-Options', 'DENY')
         self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
@@ -150,6 +152,36 @@ class Handler(BaseHTTPRequestHandler):
         if url.path in ('/', '/index.html', '/' + PAGE):
             self.send_bytes(200, (ROOT / PAGE).read_bytes(), 'text/html; charset=utf-8')
             return
+        if url.path == '/api/repere.kml':
+            qs = parse_qs(url.query)
+            try:
+                lat = float((qs.get('lat') or [''])[0])
+                lon = float((qs.get('lon') or [''])[0])
+                if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                    raise ValueError('Coordonnees hors bornes')
+            except (TypeError, ValueError):
+                self.error(400, 'Coordonnees invalides')
+                return
+            # KML uses longitude first, then latitude. This is only a candidate placemark.
+            label = html.escape(str((qs.get('label') or ['Position candidate ImmoZen'])[0])[:90])
+            kml = (
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+                '<name>ImmoZen - repere candidat</name>'
+                '<Placemark><name>' + label + '</name>'
+                '<description>Localisation candidate : a verifier sur les photographies.</description>'
+                '<Point><coordinates>' + f'{lon:.7f},{lat:.7f},0' + '</coordinates></Point>'
+                '</Placemark></Document></kml>'
+            ).encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/vnd.google-earth.kml+xml; charset=utf-8')
+            self.send_header('Content-Length', str(len(kml)))
+            self.send_header('Content-Disposition', 'attachment; filename="immozen-repere.kml"')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.end_headers()
+            self.wfile.write(kml)
+            return
         if url.path == '/api/status':
             self.send_bytes(200, b'{"status":"ok","mode":"render-test"}', 'application/json')
             return
@@ -161,14 +193,28 @@ class Handler(BaseHTTPRequestHandler):
             if not re.fullmatch(r'\d{5}', insee):
                 self.error(400, 'Code commune invalide')
                 return
-            fields = 'conso_5_usages_par_m2_ep,etiquette_dpe,etiquette_ges,surface_habitable_logement,type_batiment,annee_construction,numero_voie_ban,nom_rue_ban,_geopoint'
-            query = urlencode({'size':'3500','select':fields,'qs':'code_insee_ban:'+insee})
+            fields = 'conso_5_usages_par_m2_ep,etiquette_dpe,etiquette_ges,surface_habitable_logement,type_batiment,annee_construction,numero_voie_ban,nom_rue_ban,_geopoint,numero_dpe'
+            query = urlencode({'size':'2000','select':fields,'qs':'code_insee_ban:'+insee})
             api_url = 'https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines?' + query
             try:
-                data, _ = fetch(api_url, 'dpe', MAX_DPE)
-                payload = json.loads(data)
+                # Pagination: otherwise the best address may be on a later ADEME page.
+                rows = []
+                next_url = api_url
+                total = 0
+                for page_no in range(5):  # Budget compatible with the free test instance.
+                    data, _ = fetch(next_url, 'dpe', MAX_DPE)
+                    payload = json.loads(data)
+                    total = int(payload.get('total') or 0)
+                    rows.extend(payload.get('results') or [])
+                    candidate_next = payload.get('next') or ''
+                    if not candidate_next or len(rows) >= 9000:
+                        break
+                    parsed_next = urlsplit(candidate_next)
+                    if parsed_next.hostname != 'data.ademe.fr' or '/datasets/' not in parsed_next.path or not parsed_next.path.endswith('/lines'):
+                        break
+                    next_url = candidate_next
                 records = []
-                for item in payload.get('results', []):
+                for item in rows:
                     gp = str(item.get('_geopoint') or '').split(',')
                     if len(gp) != 2:
                         continue
@@ -186,8 +232,8 @@ class Handler(BaseHTTPRequestHandler):
                     if not address:
                         continue
                     records.append([round(conso), round(size), typ, item.get('annee_construction') or 0,
-                        item.get('etiquette_dpe') or '', address, [lon, lat], item.get('etiquette_ges') or ''])
-                response = {'records': records, 'partial': int(payload.get('total') or 0) > len(payload.get('results') or [])}
+                        item.get('etiquette_dpe') or '', address, [lon, lat], item.get('etiquette_ges') or '', item.get('numero_dpe') or ''])
+                response = {'records': records, 'partial': total > len(rows)}
                 self.send_bytes(200, json.dumps(response, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
             except (HTTPError, URLError, ValueError, TimeoutError, OSError, json.JSONDecodeError):
                 self.error(502, 'Données DPE temporairement indisponibles')
