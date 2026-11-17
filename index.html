@@ -289,6 +289,8 @@ body.iznew-mode main{padding-top:18px;min-height:calc(100vh - 160px)}
 .iznew-fallback button{border:none;border-radius:10px;background:#2755ca;color:white;cursor:pointer;padding:9px 15px;font-weight:750}
 .iznew-card p{margin-top:4px!important;line-height:1.45}.iznew-card .iznew-links{min-width:170px}
 @media(max-width:680px){.iznew-shell{padding:17px;margin:12px}.iznew-form{flex-direction:column}.iznew-form button{width:100%}.iznew-photo{height:250px}.iznew-result-head,.iznew-card{flex-direction:column;align-items:flex-start}.iznew-listing-top{align-items:flex-start}.iznew-status{white-space:normal}}
+
+.iznew-dpe-card{align-items:flex-start;gap:18px}.iznew-dpe-info{flex:1;min-width:220px}.iznew-dpe-line{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.iznew-confidence{border-radius:999px;background:#eaf3ff;color:#1454ac;padding:6px 11px;font-size:12px;font-weight:800;white-space:nowrap}.iznew-candidate-address{color:#172f55;font-weight:700}.iznew-dpe-bar{background:#e1eaf7;height:7px;border-radius:100px;overflow:hidden;margin-top:8px}.iznew-dpe-bar span{display:block;height:100%;background:#3573d5;border-radius:100px}.iznew-evidence{font-size:11px;color:#687b96}.iznew-dpe-actions{min-width:150px}.iznew-more{margin:12px 0}.iznew-more summary{font-weight:700;color:#275baf;cursor:pointer}
 </style>
 <style>
 .iz-mini{border:1px solid #b8caf0;border-radius:8px;padding:6px 9px;background:#eff5ff;color:#1d4b9e;cursor:pointer;font-size:12px;font-weight:700;margin-bottom:5px}.iz-ext{color:#2855a4;font-size:12px;text-decoration:none}.iz-visual{margin-top:22px;border:1px solid #dce5f5;background:#fff;border-radius:17px;padding:19px;box-shadow:0 8px 25px #1939690b}.iz-vhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.iz-vhead h3{font-size:19px;margin:4px 0 5px}.iz-vhead p{font-size:13px;color:#64748b;max-width:650px}.iz-eyebrow{font-size:10px;letter-spacing:.13em;color:#3a65b3;font-weight:800}.iz-pct{white-space:nowrap;background:#edf7f2;color:#08774f;border-radius:9px;padding:9px;font-weight:800;font-size:13px}.iz-selector{display:flex;flex-wrap:wrap;gap:7px;margin:15px 0}.iz-chip{background:#f5f7fc;color:#37506e;border:1px solid #e2e9f3;border-radius:20px;padding:7px 12px;cursor:pointer;font-size:12px}.iz-chip.selected{background:#1f4f9f;color:white;border-color:#1f4f9f}.iz-compare{display:grid;grid-template-columns:1fr 1fr;gap:13px}.iz-mapbox,.iz-rightbox{border:1px solid #e4eaf3;border-radius:12px;overflow:hidden;padding:13px}.iz-coltitle{font-weight:750;font-size:13px;margin-bottom:10px}.iz-mapbox iframe{width:100%;height:270px;border:0;border-radius:8px;background:#e8edf5}.iz-small{font-size:11.5px;color:#718096;line-height:1.6;margin-top:9px}.iz-rightbox p{font-size:13px;color:#52627a;line-height:1.65}.iz-links{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0}.iz-link{display:inline-block;background:#edf3ff;color:#2452a4;padding:9px 10px;border-radius:9px;text-decoration:none;font-weight:700;font-size:12px}.iz-tip{font-size:12px;color:#8b641c;background:#fff8e8;border-radius:9px;padding:11px}.iz-check{font-size:12px;font-weight:650;color:#33617d;margin-top:15px}.iz-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.iz-neutral{border:1px solid #d5deea;background:#fff;color:#40506a;border-radius:9px;padding:9px 12px;cursor:pointer;font-size:12px}@media(max-width:720px){.iz-compare{grid-template-columns:1fr}.iz-vhead{flex-direction:column}.iz-mapbox iframe{height:240px}}
@@ -1893,7 +1895,7 @@ function izNewListingEvidence(raw){
  // Search engines and scraped pages include agency addresses, corporate offices,
  // unrelated property teasers and map URLs. Never geocode that full page.
  var t=String(raw||'').replace(/\r/g,'');
- var a=t.match(/(?:^|\n)#{1,5}\s*(?:Descriptif\s+de\s+ce\s+(?:terrain|bien|logement)|Description\s+du\s+bien|Description\s+de\s+l['’]annonce|Descriptif\s+du\s+bien)[^\n]*\n/i);
+ var a=t.match(/(?:^|\n)#{1,5}\s*(?:Descriptif\s+de\s+ce\s+(?:terrain|bien|logement)|Description\s+du\s+bien|Description\s+de\s+l['’]annonce|Descriptif\s+du\s+bien|Description|Pr[eé]sentation\s+du\s+bien|Caract[eé]ristiques(?:\s+du\s+bien)?)[^\n]*\n/i);
  if(!a)return '';
  var tail=t.slice(a.index+a[0].length), stop=tail.search(/(?:\n#{1,5}\s+|\n(?:À propos de cette annonce|Contact(?:er)? l['’]agence|Informations sur l['’]agence|Autres annonces)\b)/i);
  return (stop>=0?tail.slice(0,stop):tail.slice(0,2400)).slice(0,4500)
@@ -2202,6 +2204,9 @@ function izNewDpeCriteres(title,text,matched,kind){
  if(matched&&matched.type!=='Terrain'&&Number(matched.surface)>10)e.surface=Number(matched.surface);
  e.surfaces=surface.filter((x,i,a)=>a.findIndex(y=>Math.abs(y.valeur-x.valeur)<.1)===i);
  if(!e.surfaces.length&&e.surface)e.surfaces=[{valeur:e.surface,nature:'Surface annoncée'}];
+ // Un numéro DPE exact, s'il apparaît dans l'annonce, est un indice administratif très discriminant.
+ var idDpe=source.match(/(?:num[eé]ro\s*(?:de\s*)?DPE|DPE\s*n[°o.]?|identifiant\s*DPE)\s*[:–-]?\s*([A-Z0-9]{13})\b/i);
+ e.dpeRef=idDpe?String(idDpe[1]).toUpperCase():'';
  e.dpeNum=0;
  var kwh=source.match(/(?:DPE|consommation\s+(?:[ée]nerg[ée]tique|d['’][ée]nergie)?|[ée]nergie\s+primaire)[^\n]{0,55}?(\d{2,3})\s*kWh/i)
   ||source.match(/\b(\d{2,3})\s*kWh\s*\/?\s*(?:m\s*[²2]|m2)/i);
@@ -2221,51 +2226,75 @@ async function izNewDpeCommune(code){
  return {records:list,partial:false};
 }
 function izNewDpeFilter(rows,criteria,point,kind){
- var records=Array.isArray(rows)?rows:[],haveDpe=!!(criteria.dpe||criteria.ges||criteria.dpeNum),haveSurface=criteria.surfaces&&criteria.surfaces.length;
- // No blind address guessing from a surface alone.
- if(!haveDpe||!haveSurface)return [];
- var uniq=new Set(),items=[];
+ // Deux moteurs indépendants : ce classement n'est utilisé QUE pour les logements avec DPE.
+ var records=Array.isArray(rows)?rows:[], surfaces=(criteria.surfaces||[]).filter(x=>x&&Number(x.valeur)>8);
+ if(!surfaces.length&&Number(criteria.surface)>8)surfaces=[{valeur:Number(criteria.surface),nature:'Habitable'}];
+ if(!surfaces.length)return [];
+ var hasEnergy=!!(criteria.dpe||criteria.ges||criteria.dpeNum||criteria.dpeRef), bestByAddress=new Map();
  for(var rec of records){
-  if(!Array.isArray(rec)||!Array.isArray(rec[6])||!rec[5])continue;
-  if(rec[2]!==criteria.type)continue;
+  if(!Array.isArray(rec)||!Array.isArray(rec[6])||!rec[5]||rec[2]!==criteria.type)continue;
   var lat=Number(rec[6][1]),lon=Number(rec[6][0]);
   if(!(lat>40&&lat<52&&lon>-6&&lon<11))continue;
-  if(criteria.dpe&&rec[4]!==criteria.dpe)continue;
-  if(criteria.ges&&rec[7]!==criteria.ges)continue;
-  var e=meilleurEcartSurface(Number(rec[1]),criteria.surfaces).ecart;
-  if(e>.24)continue;
-  if(criteria.dpeNum&&Math.abs(criteria.dpeNum-rec[0])/Math.max(1,criteria.dpeNum)>.25)continue;
+  var surface=Number(rec[1]);if(!(surface>9&&surface<2000))continue;
+  var areaMatch=meilleurEcartSurface(surface,surfaces),e=areaMatch.ecart;
+  if(e>.42)continue; // Une seconde surface ou un DPE ancien peuvent diverger du texte commercial.
+  var dpeOK=!criteria.dpe||String(rec[4]||'').toUpperCase()===String(criteria.dpe).toUpperCase();
+  var gesOK=!criteria.ges||String(rec[7]||'').toUpperCase()===String(criteria.ges).toUpperCase();
+  var consoDiff=criteria.dpeNum>0?Math.abs(criteria.dpeNum-Number(rec[0]))/Math.max(1,criteria.dpeNum):null;
+  // Étiquettes contradictoires : conserver comme contre-exemples hors classement.
+  if(criteria.dpeRef&&String(rec[8]||'').toUpperCase()!==criteria.dpeRef)continue;
+  if(criteria.dpe&&!dpeOK)continue;
+  if(criteria.ges&&!gesOK)continue;
+  if(consoDiff!==null&&consoDiff>.38)continue;
   var distance=point?distM(point.lat,point.lon,lat,lon):null;
-  if(point&&distance>500)continue;
+  // Ne jamais éliminer sur la base d'un rayon arbitraire de 500 m : le point source peut être approximatif.
   var score=dpeScore({etiquette:criteria.dpe||'',ges:criteria.ges||'',dpeNum:criteria.dpeNum||0,
-   type:criteria.type,annee:criteria.annee||0,surfaces:criteria.surfaces,lat:point?point.lat:null,lon:point?point.lon:null},rec);
-  var key=String(rec[5]).toLowerCase().replace(/\s+/g,' ')+'|'+Math.round(lat*10000)+'|'+Math.round(lon*10000);
-  if(uniq.has(key))continue;uniq.add(key);
-  items.push({rec,score:score.s/Math.max(1,score.max),difference:e,dist:distance});
+   type:criteria.type,annee:criteria.annee||0,surfaces:surfaces,
+   lat:point&&point.exact?point.lat:null,lon:point&&point.exact?point.lon:null},rec);
+  var normalized=Math.max(0,Math.min(1,score.s/Math.max(1,score.max)));
+  // Pénalisation des indices peu discriminants, sans présenter ce score comme une probabilité statistique.
+  var evidence=(criteria.dpe?1:0)+(criteria.ges?1:0)+(criteria.dpeNum?1:0)+(criteria.annee?1:0);
+  var ceiling=!hasEnergy?.55:Math.min(.98,.79+.05*Math.max(0,evidence-1));
+  var index=criteria.dpeRef?Math.max(95,Math.round(100*normalized)):Math.round(100*normalized*ceiling);
+  var indicators=[];
+  indicators.push('Surface '+(e<.035?'très proche':e<.12?'proche':'différente'));
+  if(criteria.dpeRef)indicators.push('Numéro DPE identique');
+  if(criteria.dpe)indicators.push('DPE '+rec[4]);
+  if(criteria.ges)indicators.push('GES '+rec[7]);
+  if(criteria.dpeNum)indicators.push('Consommation '+Math.round(Number(rec[0]))+' kWh/m²/an');
+  if(criteria.annee&&Number(rec[3])>0)indicators.push('Année '+rec[3]);
+  if(point&&distance!==null&&distance<250)indicators.push('Proche du point relevé');
+  var key=String(rec[5]).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim()+'|'+Math.round(lat*10000)+'|'+Math.round(lon*10000);
+  var item={rec,score:normalized,index,difference:e,dist:distance,indicators,hasEnergy,refSurface:areaMatch.reference};
+  if(!bestByAddress.has(key)||bestByAddress.get(key).index<index)bestByAddress.set(key,item);
  }
- items.sort((a,b)=>b.score-a.score||a.difference-b.difference);
- return items.slice(0,3);
+ return Array.from(bestByAddress.values()).sort((a,b)=>b.index-a.index||a.difference-b.difference).slice(0,8);
 }
 function izNewHouseResult(kind,point,address,criteria,match,opts){
  opts=opts||{};var el=document.getElementById('izGeoPublicResult');if(!el)return;
- var type=kind==='appartement'?'Appartement':'Maison existante';
- var html='<div class="iznew-result-head"><div><div class="iznew-eyebrow">'+izNewE(type)+'</div><h3>'+(point?'Adresse repérée':'Localisations à vérifier')+'</h3><p>'+izNewE(address||'Recherche par caractéristiques du logement')+'</p></div><span class="iznew-status">Non confirmé</span></div>';
- if(point){
-  var bbox=[point.lon-.003,point.lat-.002,point.lon+.003,point.lat+.002].join(',');
-  html+='<div class="iznew-map"><iframe loading="lazy" title="Adresse repérée" src="https://www.openstreetmap.org/export/embed.html?bbox='+encodeURIComponent(bbox)+'&layer=mapnik&marker='+encodeURIComponent(point.lat+','+point.lon)+'"></iframe></div>';
-  html+='<div class="iznew-mainlinks">'+izNewMapLinks(point.lat,point.lon)+'</div>';
- }
- if(match&&match.length){
-  html+='<div class="iznew-candidatetitle">Adresses compatibles avec le DPE et la surface</div>';
-  html+=match.map(function(c,i){var r=c.rec;
-   return '<div class="iznew-card"><div><strong>Proposition '+(i+1)+' · à comparer aux photos</strong><p>'+izNewE(r[5])+'</p><p>'+izNewE(r[1]+' m² · DPE '+(r[4]||'—')+' · GES '+(r[7]||'—'))+'</p></div>'+izNewMapLinks(r[6][1],r[6][0])+'</div>';
+ var type=kind==='appartement'?'Appartement':'Maison existante', hasMatch=!!(match&&match.length);
+ var heading=hasMatch?'Adresses candidates — moteur DPE':point?'Adresse relevée dans l’annonce':'Localisation non confirmée';
+ var html='<div class="iznew-result-head"><div><div class="iznew-eyebrow">'+izNewE(type)+' · Recherche DPE dédiée</div><h3>'+heading+'</h3><p>'+izNewE(hasMatch?'Classement selon le DPE, le GES et les surfaces annoncées':point?(address||'Adresse relevée'):'Recherche par caractéristiques du logement')+'</p></div><span class="iznew-status">À vérifier</span></div>';
+ if(hasMatch){
+  html+='<p class="iznew-caution">Les pourcentages ci-dessous sont des <strong>indices de correspondance</strong>, pas des probabilités certifiées. Les adresses ne sont validées qu’après comparaison des photographies et de l’environnement.</p>';
+  html+=match.slice(0,3).map(function(c,i){var r=c.rec,p=Math.max(0,Math.min(100,Math.round(c.index))),lat=Number(r[6][1]),lon=Number(r[6][0]);
+   return '<article class="iznew-card iznew-dpe-card"><div class="iznew-dpe-info"><div class="iznew-dpe-line"><strong>Proposition '+(i+1)+'</strong><span class="iznew-confidence" title="Indice calculé à partir des caractéristiques DPE, non probabilité de vérité">'+p+' % · indice DPE</span></div><p class="iznew-candidate-address">'+izNewE(r[5])+'</p><p>'+izNewE(r[1]+' m² · DPE '+(r[4]||'—')+' · GES '+(r[7]||'—'))+'</p><div class="iznew-dpe-bar"><span style="width:'+p+'%"></span></div><p class="iznew-evidence">'+izNewE((c.indicators||[]).join(' · '))+'</p></div><div class="iznew-dpe-actions">'+izNewMapLinks(lat,lon)+'</div></article>';
   }).join('');
-  html+='<p class="iznew-caution">Les DPE sont des rapprochements indicatifs, pas des preuves d’identité. Vérifiez la façade et l’environnement avant de retenir une adresse.</p>';
- }else if(!point){
-  html+='<p class="iznew-caution">'+izNewE(opts.missing?'Le DPE et la surface ne permettent pas de départager des adresses.':'Aucune correspondance DPE suffisamment discriminante n’a été trouvée dans cette commune.')+'</p>';
+  if(match.length>3)html+='<details class="iznew-more"><summary>Voir les '+(match.length-3)+' autres adresses candidates</summary>'+match.slice(3).map((c,i)=>'<div class="iznew-card"><div><strong>Proposition '+(i+4)+' · '+Math.round(c.index)+' %</strong><p>'+izNewE(c.rec[5])+' · '+izNewE(c.rec[1])+' m²</p></div>'+izNewMapLinks(c.rec[6][1],c.rec[6][0])+'</div>').join('')+'</details>';
+  // The map must show the highest DPE candidate, not a potentially unrelated agency/address point.
+  var first=match[0].rec,lat=Number(first[6][1]),lon=Number(first[6][0]);
+  html+='<div class="iznew-map"><iframe loading="lazy" title="Carte de la première adresse candidate" src="https://www.openstreetmap.org/export/embed.html?bbox='+encodeURIComponent([lon-.003,lat-.002,lon+.003,lat+.002].join(','))+'&layer=mapnik&marker='+encodeURIComponent(lat+','+lon)+'"></iframe></div>';
+  if(point&&match.every(x=>x.dist!==null&&x.dist>450))html+='<p class="iznew-caution">L’adresse relevée et les résultats DPE ne se recoupent pas. Aucun de ces emplacements n’est confirmé.</p>';
+ }else if(point){
+  html+='<p class="iznew-caution">Une adresse apparaît dans l’annonce, mais aucune correspondance DPE suffisante ne la confirme. Vérifiez les photos et l’emplacement avant de conclure.</p>';
+  html+='<div class="iznew-map"><iframe loading="lazy" title="Adresse relevée, non confirmée" src="https://www.openstreetmap.org/export/embed.html?bbox='+encodeURIComponent([point.lon-.003,point.lat-.002,point.lon+.003,point.lat+.002].join(','))+'&layer=mapnik&marker='+encodeURIComponent(point.lat+','+point.lon)+'"></iframe></div>';
+  html+='<div class="iznew-mainlinks">'+izNewMapLinks(point.lat,point.lon)+'</div>';
+ }else {
+  html+='<p class="iznew-caution">'+izNewE(opts.missing?'Les caractéristiques DPE et la surface manquent pour départager les adresses.':'Aucune correspondance DPE assez précise n’a été trouvée. Aucune adresse n’est inventée.')+'</p>';
  }
- if(opts.unavailable)html+='<p class="iznew-caution">La recherche DPE est momentanément indisponible. Les adresses ne sont pas inventées.</p>';
- if(opts.ocrUnavailable)html+='<p class="iznew-caution">Certaines photographies n’ont pas pu être lues automatiquement.</p>';
+ if(opts.partial)html+='<p class="iznew-caution">Recherche DPE partielle : la base contient d’autres enregistrements non analysés. Le classement peut être incomplet.</p>';
+ if(opts.unavailable)html+='<p class="iznew-caution">La base ADEME n’a pas pu répondre : cette recherche est incomplète.</p>';
+ if(opts.ocrUnavailable)html+='<p class="iznew-caution">Certaines photographies n’ont pas pu être analysées automatiquement ; leurs indices peuvent manquer.</p>';
  el.innerHTML=html;
 }
 async function izNewRun(){
@@ -2324,15 +2353,15 @@ async function izNewRun(){
   // Strict routing: the existing-house and apartment engine uses DPE, NOT parcel search.
   if(kind==='maison'||kind==='appartement'){
    izNewDisplay('wait','Recherche du logement','Croisement des caractéristiques et des adresses disponibles.');
-   var e=izNewDpeCriteres(title,text,matched,kind),match=[],dpeUnavailable=false;
-   var sufficient=!!(e.dpe||e.ges||e.dpeNum)&&!!(e.surfaces&&e.surfaces.length);
+   var e=izNewDpeCriteres(title,text,matched,kind),match=[],dpeUnavailable=false,dpePartial=false;
+   var sufficient=!!(e.dpe||e.ges||e.dpeNum||e.dpeRef)&&!!(e.surfaces&&e.surfaces.length);
    if(commune&&sufficient){
-    try{var data=await izNewDpeCommune(commune.code);match=izNewDpeFilter(data.records,e,point,kind);}
+    try{var data=await izNewDpeCommune(commune.code);dpePartial=!!data.partial;match=izNewDpeFilter(data.records,e,point,kind);}
     catch(e){dpeUnavailable=true;}
    }
    if(count!==IZ_NEW_RUN)return;
    izNewHouseResult(kind,point,address,e,match,{missing:!sufficient||!commune,
-    unavailable:dpeUnavailable,ocrUnavailable:photos.length>readable.length||!!ocrState.error});
+    unavailable:dpeUnavailable,partial:dpePartial,ocrUnavailable:photos.length>readable.length||!!ocrState.error});
    document.getElementById('izLocFallback').hidden=!!(point||match.length);return;
   }
   if(kind==='inconnu'){

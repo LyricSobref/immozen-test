@@ -161,14 +161,28 @@ class Handler(BaseHTTPRequestHandler):
             if not re.fullmatch(r'\d{5}', insee):
                 self.error(400, 'Code commune invalide')
                 return
-            fields = 'conso_5_usages_par_m2_ep,etiquette_dpe,etiquette_ges,surface_habitable_logement,type_batiment,annee_construction,numero_voie_ban,nom_rue_ban,_geopoint'
-            query = urlencode({'size':'3500','select':fields,'qs':'code_insee_ban:'+insee})
+            fields = 'conso_5_usages_par_m2_ep,etiquette_dpe,etiquette_ges,surface_habitable_logement,type_batiment,annee_construction,numero_voie_ban,nom_rue_ban,_geopoint,numero_dpe'
+            query = urlencode({'size':'2000','select':fields,'qs':'code_insee_ban:'+insee})
             api_url = 'https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines?' + query
             try:
-                data, _ = fetch(api_url, 'dpe', MAX_DPE)
-                payload = json.loads(data)
+                # Pagination: otherwise the best address may be on a later ADEME page.
+                rows = []
+                next_url = api_url
+                total = 0
+                for page_no in range(5):  # Budget compatible with the free test instance.
+                    data, _ = fetch(next_url, 'dpe', MAX_DPE)
+                    payload = json.loads(data)
+                    total = int(payload.get('total') or 0)
+                    rows.extend(payload.get('results') or [])
+                    candidate_next = payload.get('next') or ''
+                    if not candidate_next or len(rows) >= 9000:
+                        break
+                    parsed_next = urlsplit(candidate_next)
+                    if parsed_next.hostname != 'data.ademe.fr' or '/datasets/' not in parsed_next.path or not parsed_next.path.endswith('/lines'):
+                        break
+                    next_url = candidate_next
                 records = []
-                for item in payload.get('results', []):
+                for item in rows:
                     gp = str(item.get('_geopoint') or '').split(',')
                     if len(gp) != 2:
                         continue
@@ -186,8 +200,8 @@ class Handler(BaseHTTPRequestHandler):
                     if not address:
                         continue
                     records.append([round(conso), round(size), typ, item.get('annee_construction') or 0,
-                        item.get('etiquette_dpe') or '', address, [lon, lat], item.get('etiquette_ges') or ''])
-                response = {'records': records, 'partial': int(payload.get('total') or 0) > len(payload.get('results') or [])}
+                        item.get('etiquette_dpe') or '', address, [lon, lat], item.get('etiquette_ges') or '', item.get('numero_dpe') or ''])
+                response = {'records': records, 'partial': total > len(rows)}
                 self.send_bytes(200, json.dumps(response, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
             except (HTTPError, URLError, ValueError, TimeoutError, OSError, json.JSONDecodeError):
                 self.error(502, 'Données DPE temporairement indisponibles')
